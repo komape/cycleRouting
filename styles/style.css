@@ -35,12 +35,8 @@ form {
     margin-top: .5em;
 }
 
-input {
+.form-row {
     margin-bottom: .5em !important;
-}
-
-#calculate-route-button {
-    margin-left: auto;
 }
 
 #sidebar-details-wrapper {

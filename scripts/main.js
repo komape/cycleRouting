@@ -17,6 +17,9 @@ $(document).ready(function () {
         }
     }
 
+    // controller to cancel fetch requests
+    var abortController = new AbortController();
+
     var Leaflet = {
 
         baseCenter: [51, 10],
@@ -41,7 +44,7 @@ $(document).ready(function () {
 
         removeLayer(layer) {
             if (layer != undefined) {
-                console.debug(map.removeLayer(layer));
+                map.removeLayer(layer);
             }
         },
 
@@ -143,17 +146,20 @@ $(document).ready(function () {
             lonlats += points[0].lng + ',' + points[0].lat + '|';
             lonlats += points[1].lng + ',' + points[1].lat
             var url = this.baseUrl + '?' + lonlats + '&format=' + this.format.geojson + '&alternativeidx=0&profile=' + BRouter.profile;
-            fetch(url).then(function (response) {
+            fetch(url, {
+                signal: abortController.signal
+            }).then(response => {
                 if (!response.ok) {
                     throw Error(response.status + ': ' + response.statusText);
                 }
                 if (response.headers.get('Content-Type').startsWith('text/plain')) {
                     throw Error('Content-Type: ' + response.headers.get('Content-Type'));
                 }
-                response.json().then(function (json) {
-                    jsonProcessor(json);
-                });
-            }).catch(function (error) {
+                return response.json();
+            }).then(json => {
+                jsonProcessor(json);
+            }).catch(error => {
+                console.log(error);
                 errorProcessor(error);
             });
         },
@@ -227,6 +233,7 @@ $(document).ready(function () {
         Leaflet.removeLayer(currentPath);
         updateUrl(points);
         changeGoButtonStatus(false);
+        showCancelButton();
         showPath(points);
     });
 
@@ -297,19 +304,36 @@ $(document).ready(function () {
         }
     }
 
+    function showCancelButton() {
+        $('#cancel-route-calc-wrapper').append('<button type="button" id="cancel-route-calc-button" class="btn btn-danger btn-block">Cancel</button>');
+        $('#cancel-route-calc-button').on('click', function () {
+            abortController.abort();
+            abortController = new AbortController();
+            changeGoButtonStatus(true);
+            removeCancelButton();
+        });
+    }
+
+    function removeCancelButton() {
+        $('#cancel-route-calc-button').remove();
+    }
+
     function showPath(points) {
         $('#sidebar-details-wrapper').empty();
         BRouter.getPath(points, function (json) {
             currentPath = Leaflet.addPath(json.features[0].geometry);
+            removeCancelButton();
             map.fitBounds(points);
             showDetails(json.features[0].properties);
             showDownloadButton(points);
         }, function (error) {
             changeGoButtonStatus(true);
-            $('#route-error-modal > .modal-dialog > .modal-content > .modal-body > p').empty();
-            console.log(error.message);
-            $('#route-error-modal > .modal-dialog > .modal-content > .modal-body > p').append(error.message);
-            $('#route-error-modal').modal();
+            if (error.name != "AbortError") {
+                $('#route-error-modal > .modal-dialog > .modal-content > .modal-body > p').empty();
+                console.log(error.message);
+                $('#route-error-modal > .modal-dialog > .modal-content > .modal-body > p').append(error.message);
+                $('#route-error-modal').modal();
+            }
         });
     }
 
@@ -398,6 +422,7 @@ $(document).ready(function () {
         if (routeNeedsReload && points[0] != undefined && points[1] != undefined) {
             Leaflet.removeLayer(currentPath);
             changeGoButtonStatus(false);
+            showCancelButton();
             showPath(points);
         }
     }
