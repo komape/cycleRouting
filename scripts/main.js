@@ -269,15 +269,14 @@ $(document).ready(function () {
                 // ##### create html structure
                 var a = document.createElement('DIV');
                 a.setAttribute('id', inputFieldId + 'autocomplete-list');
-                a.setAttribute('class', 'autocomplete-items')
+                a.setAttribute('class', 'autocomplete-items text-dark')
                 $(inputFieldId).after(a);
 
                 for (var i = 0; i < hits.length; i++) {
                     var hit = hits[i];
                     var b = document.createElement('DIV');
                     b.setAttribute('data-hit-id', i);
-                    b.innerHTML = '<strong>' + hit.name.substr(0, input.length) + '</strong>';
-                    b.innerHTML += hit.name.substr(input.length);
+                    b.innerHTML = hit.name;
                     var subB = '';
                     subB += (hit.street == undefined ? '' : hit.street + ', ');
                     subB += (hit.city == undefined ? '' : hit.city + ', ');
@@ -310,6 +309,7 @@ $(document).ready(function () {
             abortController.abort();
             abortController = new AbortController();
             changeGoButtonStatus(true);
+            removeElevationProfile();
             removeCancelButton();
         });
     }
@@ -326,6 +326,7 @@ $(document).ready(function () {
             map.fitBounds(points);
             showDetails(json.features[0].properties);
             showDownloadButton(points);
+            showElevationProfile(json.features[0].geometry.coordinates);
         }, function (error) {
             changeGoButtonStatus(true);
             if (error.name != "AbortError") {
@@ -381,6 +382,98 @@ $(document).ready(function () {
             $('#calculate-route-button').append('<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Loading...');
             $('#calculate-route-button').prop('disabled', true);
         }
+    }
+
+    function showElevationProfile(coordinates) {
+        $('#elev-profile-chart-wrapper').empty();
+        $('#elev-profile-chart-wrapper').append('<canvas id="elev-profile-chart"></canvas>');
+        $('#sidebar-details-wrapper').append('<p id="elev-hint">↧ Scroll for elevation profile ↧</p>');
+        var points = convertMessagesToPointsForChart(coordinates);
+        new Chart($('#elev-profile-chart'), {
+            type: 'line',
+            data: {
+                labels: points.map((elem) => elem.x),
+                fillOpacity: .7,
+                datasets: [{
+                    data: points,
+                    backgroundColor: '#33cccc',
+                    borderColor: '#ff6699',
+                    fill: true,
+                    pointRadius: 0
+                }]
+            },
+            options: {
+                legend: {
+                    display: false
+                },
+                scales: {
+                    xAxes: [{
+                        type: 'linear',
+                        scaleLabel: {
+                            display: true,
+                            labelString: 'distance in km',
+                            fontColor: '#f8f9fa'
+                        },
+                        ticks: {
+                            fontColor: '#f8f9fa',
+                            max: Math.ceil(points[points.length - 1].x)
+                        },
+                        gridLines: {
+                            display: false,
+                            drawBorder: false
+                        }
+                    }],
+                    yAxes: [{
+                        type: 'linear',
+                        scaleLabel: {
+                            display: true,
+                            labelString: 'elevation in m',
+                            fontColor: '#f8f9fa'
+                        },
+                        ticks: {
+                            fontColor: '#f8f9fa',
+                            beginAtZero: true
+                        },
+                        gridLines: {
+                            display: false,
+                            drawBorder: false
+                        }
+                    }]
+                },
+                maintainAspectRatio: false,
+                responsive: true
+            }
+        });
+    }
+
+    function removeElevationProfile() {
+        $('#elev-profile-chart-wrapper').empty();
+        $('#elev-profile-chart-wrapper').append('<h3 class="text-center>Enter a Route to get the elevation profile<h3>');
+    }
+
+    function convertMessagesToPointsForChart(coordinates) {
+        var points = new Array(coordinates.length - 1);
+        var distanceSum = 0;
+        points[0] = {
+            x: distanceSum,
+            y: coordinates[0][2]
+        }
+        for (var i = 1; i < coordinates.length; i++) {
+            var lat1 = coordinates[i - 1][1];
+            var lng1 = coordinates[i - 1][0];
+            var lat2 = coordinates[i][1];
+            var lng2 = coordinates[i][0];
+            var dy = 111.3 * (lat1 - lat2);
+            var lat = (lat1 + lat2) / 2 * 0.01745;
+            var dx = 111.3 * Math.cos(lat) * (lng1 - lng2);
+            var distance = Math.sqrt(dx * dx + dy * dy);
+            distanceSum += distance;
+            points[i - 1] = {
+                x: distanceSum,
+                y: +coordinates[i][2]
+            }
+        }
+        return points;
     }
 
     function checkUrl() {
