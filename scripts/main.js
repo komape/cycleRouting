@@ -40,7 +40,6 @@ $(document).ready(function () {
         },
 
         removeLayer(layer) {
-            console.debug(layer);
             if (layer != undefined) {
                 console.debug(map.removeLayer(layer));
             }
@@ -235,6 +234,20 @@ $(document).ready(function () {
         checkUrl();
     });
 
+    $('#swap-route-input-button').on('click', function () {
+        var startPoint = points[0];
+        var startMarker = markers[0];
+        var startText = $('#start-point-input').val();
+
+        points[0] = points[1];
+        markers[0] = markers[1];
+        $('#start-point-input').val($('#end-point-input').val());
+
+        points[1] = startPoint;
+        markers[1] = startMarker;
+        $('#end-point-input').val(startText);
+    })
+
     /**
      *   get suggested geo locations based on user input
      */
@@ -330,9 +343,7 @@ $(document).ready(function () {
         var startPoint = $('#start-point-input').val();
         var endPoint = $('#end-point-input').val();
         var trackName = startPoint + '_' + endPoint;
-        var button = '<a href="' + BRouter.getGpxUrl(points, trackName) + '">';
-        button += '<button id="download-route-button" type="button" class="btn btn-primary btn-block">Download as GPX</button>';
-        button += '</a>';
+        var button = '<a href="' + BRouter.getGpxUrl(points, trackName) + '" id="download-route-button" role="button" class="btn btn-primary btn-block">Download as GPX</a>';
         $('#sidebar-details-wrapper').append(button);
     }
 
