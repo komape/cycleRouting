@@ -1,27 +1,10 @@
-@media(min-width:768px) {
-
-    html,
-    body,
-    .maxHeight {
-        height: 100% !important;
-        margin: 0 !important;
-        padding: 0 !important;
-    }
+.fullHeight {
+    height: 100vh;
+    padding: 0 !important;
 }
 
 #map-wrapper {
     position: relative;
-}
-
-#sidebar-header {
-    font-weight: bolder;
-    font-family: 'Courier New', Courier, monospace;
-    margin-top: .5em;
-}
-
-footer {
-    position: absolute;
-    bottom: .5em;
 }
 
 #map {
@@ -31,33 +14,18 @@ footer {
     width: 100%;
 }
 
+#sidebar-header {
+    font-weight: bolder;
+    font-family: 'Courier New', Courier, monospace;
+    margin-top: .5em;
+}
+
 form {
     margin-top: .5em;
 }
 
-input {
+.form-row {
     margin-bottom: .5em !important;
-}
-
-#calculate-route-button {
-    margin-left: auto;
-}
-
-#sidebar-details-wrapper {
-    overflow: auto;
-    margin-top: .5em;
-}
-
-.card {
-    margin-bottom: .5em;
-}
-
-.card-body {
-    padding: .5em !important;
-}
-
-.table {
-    border-radius: .25rem;
 }
 
 .autocomplete {
@@ -94,4 +62,28 @@ input {
     /*when navigating through the items using the arrow keys:*/
     background-color: DodgerBlue !important;
     color: #ffffff;
+}
+
+#sidebar-details-wrapper {
+    overflow: auto;
+    margin-top: .5em;
+}
+
+#elev-hint {
+    margin-top: .5em;
+    text-align: center;
+}
+
+footer {
+    position: absolute;
+    bottom: .5em;
+}
+
+.table {
+    border-radius: .25rem;
+}
+
+#elev-profile-chart-wrapper {
+    height: 30vh;
+    margin-top: .5em;
 }

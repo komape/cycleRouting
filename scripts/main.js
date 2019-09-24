@@ -17,6 +17,9 @@ $(document).ready(function () {
         }
     }
 
+    // controller to cancel fetch requests
+    var abortController = new AbortController();
+
     var Leaflet = {
 
         baseCenter: [51, 10],
@@ -40,9 +43,8 @@ $(document).ready(function () {
         },
 
         removeLayer(layer) {
-            console.debug(layer);
             if (layer != undefined) {
-                console.debug(map.removeLayer(layer));
+                map.removeLayer(layer);
             }
         },
 
@@ -144,17 +146,20 @@ $(document).ready(function () {
             lonlats += points[0].lng + ',' + points[0].lat + '|';
             lonlats += points[1].lng + ',' + points[1].lat
             var url = this.baseUrl + '?' + lonlats + '&format=' + this.format.geojson + '&alternativeidx=0&profile=' + BRouter.profile;
-            fetch(url).then(function (response) {
+            fetch(url, {
+                signal: abortController.signal
+            }).then(response => {
                 if (!response.ok) {
                     throw Error(response.status + ': ' + response.statusText);
                 }
                 if (response.headers.get('Content-Type').startsWith('text/plain')) {
                     throw Error('Content-Type: ' + response.headers.get('Content-Type'));
                 }
-                response.json().then(function (json) {
-                    jsonProcessor(json);
-                });
-            }).catch(function (error) {
+                return response.json();
+            }).then(json => {
+                jsonProcessor(json);
+            }).catch(error => {
+                console.log(error);
                 errorProcessor(error);
             });
         },
@@ -228,12 +233,27 @@ $(document).ready(function () {
         Leaflet.removeLayer(currentPath);
         updateUrl(points);
         changeGoButtonStatus(false);
+        showCancelButton();
         showPath(points);
     });
 
     $(window).on('popstate', function (event) {
         checkUrl();
     });
+
+    $('#swap-route-input-button').on('click', function () {
+        var startPoint = points[0];
+        var startMarker = markers[0];
+        var startText = $('#start-point-input').val();
+
+        points[0] = points[1];
+        markers[0] = markers[1];
+        $('#start-point-input').val($('#end-point-input').val());
+
+        points[1] = startPoint;
+        markers[1] = startMarker;
+        $('#end-point-input').val(startText);
+    })
 
     /**
      *   get suggested geo locations based on user input
@@ -249,15 +269,14 @@ $(document).ready(function () {
                 // ##### create html structure
                 var a = document.createElement('DIV');
                 a.setAttribute('id', inputFieldId + 'autocomplete-list');
-                a.setAttribute('class', 'autocomplete-items')
+                a.setAttribute('class', 'autocomplete-items text-dark')
                 $(inputFieldId).after(a);
 
                 for (var i = 0; i < hits.length; i++) {
                     var hit = hits[i];
                     var b = document.createElement('DIV');
                     b.setAttribute('data-hit-id', i);
-                    b.innerHTML = '<strong>' + hit.name.substr(0, input.length) + '</strong>';
-                    b.innerHTML += hit.name.substr(input.length);
+                    b.innerHTML = hit.name;
                     var subB = '';
                     subB += (hit.street == undefined ? '' : hit.street + ', ');
                     subB += (hit.city == undefined ? '' : hit.city + ', ');
@@ -284,19 +303,38 @@ $(document).ready(function () {
         }
     }
 
+    function showCancelButton() {
+        $('#cancel-route-calc-wrapper').append('<button type="button" id="cancel-route-calc-button" class="btn btn-danger btn-block">Cancel</button>');
+        $('#cancel-route-calc-button').on('click', function () {
+            abortController.abort();
+            abortController = new AbortController();
+            changeGoButtonStatus(true);
+            removeElevationProfile();
+            removeCancelButton();
+        });
+    }
+
+    function removeCancelButton() {
+        $('#cancel-route-calc-button').remove();
+    }
+
     function showPath(points) {
         $('#sidebar-details-wrapper').empty();
         BRouter.getPath(points, function (json) {
             currentPath = Leaflet.addPath(json.features[0].geometry);
+            removeCancelButton();
             map.fitBounds(points);
             showDetails(json.features[0].properties);
             showDownloadButton(points);
+            showElevationProfile(json.features[0].geometry.coordinates);
         }, function (error) {
             changeGoButtonStatus(true);
-            $('#route-error-modal > .modal-dialog > .modal-content > .modal-body > p').empty();
-            console.log(error.message);
-            $('#route-error-modal > .modal-dialog > .modal-content > .modal-body > p').append(error.message);
-            $('#route-error-modal').modal();
+            if (error.name != "AbortError") {
+                $('#route-error-modal > .modal-dialog > .modal-content > .modal-body > p').empty();
+                console.log(error.message);
+                $('#route-error-modal > .modal-dialog > .modal-content > .modal-body > p').append(error.message);
+                $('#route-error-modal').modal();
+            }
         });
     }
 
@@ -330,9 +368,7 @@ $(document).ready(function () {
         var startPoint = $('#start-point-input').val();
         var endPoint = $('#end-point-input').val();
         var trackName = startPoint + '_' + endPoint;
-        var button = '<a href="' + BRouter.getGpxUrl(points, trackName) + '">';
-        button += '<button id="download-route-button" type="button" class="btn btn-primary btn-block">Download as GPX</button>';
-        button += '</a>';
+        var button = '<a href="' + BRouter.getGpxUrl(points, trackName) + '" id="download-route-button" role="button" class="btn btn-primary btn-block">Download as GPX</a>';
         $('#sidebar-details-wrapper').append(button);
     }
 
@@ -346,6 +382,98 @@ $(document).ready(function () {
             $('#calculate-route-button').append('<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Loading...');
             $('#calculate-route-button').prop('disabled', true);
         }
+    }
+
+    function showElevationProfile(coordinates) {
+        $('#elev-profile-chart-wrapper').empty();
+        $('#elev-profile-chart-wrapper').append('<canvas id="elev-profile-chart"></canvas>');
+        $('#sidebar-details-wrapper').append('<p id="elev-hint">↧ Scroll for elevation profile ↧</p>');
+        var points = convertMessagesToPointsForChart(coordinates);
+        new Chart($('#elev-profile-chart'), {
+            type: 'line',
+            data: {
+                labels: points.map((elem) => elem.x),
+                fillOpacity: .7,
+                datasets: [{
+                    data: points,
+                    backgroundColor: '#33cccc',
+                    borderColor: '#ff6699',
+                    fill: true,
+                    pointRadius: 0
+                }]
+            },
+            options: {
+                legend: {
+                    display: false
+                },
+                scales: {
+                    xAxes: [{
+                        type: 'linear',
+                        scaleLabel: {
+                            display: true,
+                            labelString: 'distance in km',
+                            fontColor: '#f8f9fa'
+                        },
+                        ticks: {
+                            fontColor: '#f8f9fa',
+                            max: Math.ceil(points[points.length - 1].x)
+                        },
+                        gridLines: {
+                            display: false,
+                            drawBorder: false
+                        }
+                    }],
+                    yAxes: [{
+                        type: 'linear',
+                        scaleLabel: {
+                            display: true,
+                            labelString: 'elevation in m',
+                            fontColor: '#f8f9fa'
+                        },
+                        ticks: {
+                            fontColor: '#f8f9fa',
+                            beginAtZero: true
+                        },
+                        gridLines: {
+                            display: false,
+                            drawBorder: false
+                        }
+                    }]
+                },
+                maintainAspectRatio: false,
+                responsive: true
+            }
+        });
+    }
+
+    function removeElevationProfile() {
+        $('#elev-profile-chart-wrapper').empty();
+        $('#elev-profile-chart-wrapper').append('<h3 class="text-center>Enter a Route to get the elevation profile<h3>');
+    }
+
+    function convertMessagesToPointsForChart(coordinates) {
+        var points = new Array(coordinates.length - 1);
+        var distanceSum = 0;
+        points[0] = {
+            x: distanceSum,
+            y: coordinates[0][2]
+        }
+        for (var i = 1; i < coordinates.length; i++) {
+            var lat1 = coordinates[i - 1][1];
+            var lng1 = coordinates[i - 1][0];
+            var lat2 = coordinates[i][1];
+            var lng2 = coordinates[i][0];
+            var dy = 111.3 * (lat1 - lat2);
+            var lat = (lat1 + lat2) / 2 * 0.01745;
+            var dx = 111.3 * Math.cos(lat) * (lng1 - lng2);
+            var distance = Math.sqrt(dx * dx + dy * dy);
+            distanceSum += distance;
+            points[i - 1] = {
+                x: distanceSum,
+                y: +coordinates[i][2]
+            }
+        }
+        return points;
     }
 
     function checkUrl() {
@@ -387,6 +515,7 @@ $(document).ready(function () {
         if (routeNeedsReload && points[0] != undefined && points[1] != undefined) {
             Leaflet.removeLayer(currentPath);
             changeGoButtonStatus(false);
+            showCancelButton();
             showPath(points);
         }
     }
