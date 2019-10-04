@@ -1,348 +1,414 @@
 $(document).ready(function () {
 
+    website.extAPIs.Leaflet.initMap();
+    website.extAPIs.BRouter.initProfile();
+    // wait until profile is loaded
+    $(document).on('BRouterProfileChanged', function () {
+        console.log('profile ' + website.extAPIs.BRouter.profileId + ' is loaded');
+        website.checkUrl();
+    });
+
+    // ####### listeners for geo suggestion handling
+    $('#route-form').on('input', '.point-input', function () {
+        website.showGeoSuggestion($(this), $(this).val(), website.points);
+    });
+
+    $(document).on('click', function () {
+        website.closeAllGeoSuggestions();
+    });
+
+    $(document).keydown(function (event) {
+        if (event.which == 27) {
+            website.closeAllGeoSuggestions();
+        }
+    });
+    // ####### 
+
+    /**
+     * calculate route button listener
+     */
+    $('#calculate-route-button').on('click', function () {
+        if (website.points.length < 2) {
+            return;
+        }
+        website.extAPIs.Leaflet.removeLayer(website.currentPath);
+        website.updateUrl(website.points);
+        website.changeGoButtonStatus(false);
+        website.showCancelButton();
+        website.showPath(website.points);
+    });
+
+    $(window).on('popstate', function (event) {
+        website.checkUrl();
+    });
+
+    $('#swap-route-input-button').on('click', function () {
+        var startPoint = website.points[0];
+        var startMarker = website.markers[0];
+        var startText = $('#point-input-A').val();
+
+        website.points[0] = website.points[1];
+        website.markers[0] = website.markers[1];
+        $('#point-input-A').val($('#point-input-B').val());
+
+        website.points[1] = startPoint;
+        website.markers[1] = startMarker;
+        $('#point-input-B').val(startText);
+    });
+
+    $('#add-route-point-button').on('click', function () {
+        var formRowString = '<div class="form-group row">';
+        formRowString += '<label for="point-1" class="col-1 col-form-label">1</label>';
+        formRowString += '<div class="col point-input-wrapper" style="padding-right: 2px">';
+        formRowString += '<input class="form-control point-input" type="search" name="point-1" placeholder="Zwischenziel">';
+        formRowString += '</div>';
+        formRowString += '<div class="col-2" style="padding-left: 2px">';
+        formRowString += '<button type="button" class="btn btn-danger btn-block remove-input-btn font-weight-bold">&#xd7;</button>';
+        formRowString += '</div>';
+        formRowString += '</div>';
+        $('#point-input-B').parent().parent().before(formRowString);
+    });
+
+    $('#route-form').on('click', '.remove-input-btn', function () {
+        $(this).parent().parent().remove();
+    });
+});
+
+class Point {
+    constructor(lat, lng) {
+        this.lat = lat;
+        this.lng = lng;
+    }
+}
+
+var website = {
     // map element
-    var map;
+    map: undefined,
 
     // points for path
-    var points = new Array(2);
-    var markers = new Array(2);
+    points: new Array(),
+    markers: new Array(),
 
     // current shown path
-    var currentPath;
-
-    class Point {
-        constructor(lat, lng) {
-            this.lat = lat;
-            this.lng = lng;
-        }
-    }
+    currentPath: undefined,
 
     // controller to cancel fetch requests
-    var abortController = new AbortController();
+    abortController: new AbortController(),
 
-    var Leaflet = {
+    extAPIs: {
 
-        baseCenter: [51, 10],
-        baseZoom: 5,
+        Leaflet: {
 
-        defaultPathStyle: {
-            weight: 8,
-            opacity: .75
-        },
+            baseCenter: [51, 10],
+            baseZoom: 5,
 
-        initMap() {
-            map = L.map('map').setView(this.baseCenter, this.baseZoom);
-            L.tileLayer.provider(Thunderforest.mapStyle, {
-                apikey: Thunderforest.apiKey
-            }).addTo(map);
-            L.control.scale().addTo(map);
-        },
+            defaultPathStyle: {
+                weight: 8,
+                opacity: .75
+            },
 
-        addMarker(coordinates) {
-            return L.marker(coordinates).addTo(map);
-        },
+            Thunderforest: {
+                apiKey: '06ca471c8d2d4e1cac753d9556cb3702',
+                mapStyle: 'Thunderforest.OpenCycleMap'
+            },
 
-        removeLayer(layer) {
-            if (layer != undefined) {
-                map.removeLayer(layer);
+            initMap() {
+                website.map = L.map('map').setView(this.baseCenter, this.baseZoom);
+                L.tileLayer.provider(this.Thunderforest.mapStyle, {
+                    apikey: this.Thunderforest.apiKey
+                }).addTo(website.map);
+                L.control.scale().addTo(website.map);
+            },
+
+            addMarker(coordinates) {
+                return L.marker(coordinates).addTo(website.map);
+            },
+
+            removeLayer(layer) {
+                if (layer != undefined) {
+                    website.map.removeLayer(layer);
+                }
+            },
+
+            flyToMarker(marker) {
+                website.map.flyTo(marker.getLatLng())
+            },
+
+            addPath(geoJsonFeature, style = this.defaultPathStyle) {
+                return L.geoJson(geoJsonFeature, {
+                    style: style
+                }).addTo(website.map);
             }
         },
 
-        flyToMarker(marker) {
-            map.flyTo(marker.getLatLng())
-        },
 
-        addPath(geoJsonFeature, style = this.defaultPathStyle) {
-            return L.geoJson(geoJsonFeature, {
-                style: style
-            }).addTo(map);
-        }
-    }
+        Graphhopper: {
+            apiKey: '83626281-4201-44fa-955a-95f88b2eb3eb',
+            baseUrl: 'https://graphhopper.com/api/1/',
+            routeUrl: 'route',
+            geocodeUrl: 'geocode',
+            provider: 'default',
 
-    var Thunderforest = {
-        apiKey: '06ca471c8d2d4e1cac753d9556cb3702',
-        mapStyle: 'Thunderforest.OpenCycleMap'
-    }
-
-    var Graphhopper = {
-        apiKey: '83626281-4201-44fa-955a-95f88b2eb3eb',
-        baseUrl: 'https://graphhopper.com/api/1/',
-        routeUrl: 'route',
-        geocodeUrl: 'geocode',
-        provider: 'default',
-
-        getGeoCodeSuggestion(input, jsonProcessor) {
-            var url = this.baseUrl + this.geocodeUrl + '?key=' + this.apiKey + '&q=' + input + '&limit=5&provider=' + this.provider;
-            fetch(url).then(function (response) {
-                response.json().then(function (json) {
-                    jsonProcessor(json);
-                });
-            });
-        },
-
-        getReversedGeoCodeSuggestion(point, jsonProcessor) {
-            var url = this.baseUrl + this.geocodeUrl + '?key=' + this.apiKey + '&reverse=true&limit=1&point=' + point.lat + ',' + point.lng;
-            fetch(url).then(function (response) {
-                response.json().then(function (json) {
-                    jsonProcessor(json);
-                });
-            });
-        },
-
-        getPath(points, jsonProcessor) {
-            var url = this.baseUrl + this.routeUrl + '?key=' + this.apiKey + '&vehicle=bike&points_encoded=false';
-            for (var i in points) {
-                var pointString = points[i].lat + ',' + points[i].lng;
-                url += '&point=' + pointString;
-            }
-            fetch(url).then(function (response) {
-                response.json().then(function (json) {
-                    jsonProcessor(json);
-                });
-            });
-        }
-    }
-
-    var BRouter = {
-        baseUrl: 'http://brouter.de/brouter',
-        profileUrl: '/profile',
-        profileFile: 'scripts/trekking.brf',
-        profile: 'trekking',
-        format: {
-            geojson: 'geojson',
-            gpx: 'gpx'
-        },
-
-        initProfile() {
-            this.getProfile(this.uploadProfile);
-        },
-
-        getProfile(profileProcessor) {
-            fetch(this.profileFile).then(function (response) {
-                response.text().then(function (text) {
-                    profileProcessor(text);
-                });
-            });
-        },
-
-        uploadProfile(text) {
-            var url = BRouter.baseUrl + BRouter.profileUrl;
-            fetch(url, {
-                method: 'POST',
-                body: text
-            }).then(function (response) {
-                response.json().then(function (json) {
-                    BRouter.profile = json.profileid;
-                    var event = $.Event('BRouterProfileChanged', {
-                        profile: json.profileid
+            getGeoCodeSuggestion(input, jsonProcessor) {
+                var url = this.baseUrl + this.geocodeUrl + '?key=' + this.apiKey + '&q=' + input + '&limit=5&provider=' + this.provider;
+                fetch(url).then(function (response) {
+                    response.json().then(function (json) {
+                        jsonProcessor(json);
                     });
-                    $(document).trigger(event);
                 });
-            });
-        },
+            },
 
-        getPath(points, jsonProcessor, errorProcessor) {
-            var lonlats = 'lonlats=';
-            lonlats += points[0].lng + ',' + points[0].lat + '|';
-            lonlats += points[1].lng + ',' + points[1].lat
-            var url = this.baseUrl + '?' + lonlats + '&format=' + this.format.geojson + '&alternativeidx=0&profile=' + BRouter.profile;
-            fetch(url, {
-                signal: abortController.signal
-            }).then(response => {
-                if (!response.ok) {
-                    throw Error(response.status + ': ' + response.statusText);
-                }
-                if (response.headers.get('Content-Type').startsWith('text/plain')) {
-                    throw Error('Content-Type: ' + response.headers.get('Content-Type'));
-                }
-                return response.json();
-            }).then(json => {
-                jsonProcessor(json);
-            }).catch(error => {
-                console.log(error);
-                errorProcessor(error);
-            });
-        },
-
-        getGpxPath(points, trackName, fileProcessor) {
-            var lonlats = 'lonlats=';
-            lonlats += points[0].lng + ',' + points[0].lat + '|';
-            lonlats += points[1].lng + ',' + points[1].lat
-            var url = this.baseUrl + '?' + lonlats + '&format=' + this.format.gpx + '&trackname=' + trackName + '&alternativeidx=0&profile=' + BRouter.profile;
-            fetch(url).then(function (response) {
-                response.blob().then(function (gpxFile) {
-                    fileProcessor(gpxFile);
+            getReversedGeoCodeSuggestion(point, jsonProcessor) {
+                var url = this.baseUrl + this.geocodeUrl + '?key=' + this.apiKey + '&reverse=true&limit=1&point=' + point.lat + ',' + point.lng;
+                fetch(url).then(function (response) {
+                    response.json().then(function (json) {
+                        jsonProcessor(json);
+                    });
                 });
-            });
+            },
+
+            getPath(points, jsonProcessor) {
+                var url = this.baseUrl + this.routeUrl + '?key=' + this.apiKey + '&vehicle=bike&points_encoded=false';
+                for (var i in points) {
+                    var pointString = points[i].lat + ',' + points[i].lng;
+                    url += '&point=' + pointString;
+                }
+                fetch(url).then(function (response) {
+                    response.json().then(function (json) {
+                        jsonProcessor(json);
+                    });
+                });
+            }
         },
 
-        getGpxUrl(points, trackName) {
-            var lonlats = 'lonlats=';
-            lonlats += points[0].lng + ',' + points[0].lat + '|';
-            lonlats += points[1].lng + ',' + points[1].lat
-            var url = this.baseUrl + '?' + lonlats + '&format=' + this.format.gpx + '&trackname=' + trackName + '&alternativeidx=0&profile=' + BRouter.profile;
-            return url;
+        BRouter: {
+            baseUrl: 'http://brouter.de/brouter',
+            profileUrl: '/profile',
+            profileFile: 'scripts/trekking.brf',
+            profileId: 'trekking',
+            format: {
+                geojson: 'geojson',
+                gpx: 'gpx'
+            },
+
+            initProfile() {
+                this.getProfile(this.uploadProfile);
+            },
+
+            getProfile(profileProcessor) {
+                fetch(this.profileFile).then(function (response) {
+                    response.text().then(function (text) {
+                        profileProcessor(text);
+                    });
+                });
+            },
+
+            uploadProfile(text) {
+                var url = website.extAPIs.BRouter.baseUrl + website.extAPIs.BRouter.profileUrl;
+                fetch(url, {
+                    method: 'POST',
+                    body: text
+                }).then(function (response) {
+                    response.json().then(function (json) {
+                        website.extAPIs.BRouter.profile = json.profileid;
+                        var event = $.Event('BRouterProfileChanged', {
+                            profileId: json.profileid
+                        });
+                        $(document).trigger(event);
+                    });
+                });
+            },
+
+            getPath(points, jsonProcessor, errorProcessor) {
+                var lonlats = 'lonlats=';
+                lonlats += points[0].lng + ',' + points[0].lat + '|';
+                lonlats += points[1].lng + ',' + points[1].lat
+                var url = this.baseUrl + '?' + lonlats + '&format=' + this.format.geojson + '&alternativeidx=0&profile=' + this.profileId;
+                fetch(url, {
+                    signal: website.abortController.signal
+                }).then(response => {
+                    if (!response.ok) {
+                        throw Error(response.status + ': ' + response.statusText);
+                    }
+                    if (response.headers.get('Content-Type').startsWith('text/plain')) {
+                        throw Error('Content-Type: ' + response.headers.get('Content-Type'));
+                    }
+                    return response.json();
+                }).then(json => {
+                    jsonProcessor(json);
+                }).catch(error => {
+                    console.log(error);
+                    errorProcessor(error);
+                });
+            },
+
+            getGpxPath(points, trackName, fileProcessor) {
+                var lonlats = 'lonlats=';
+                lonlats += points[0].lng + ',' + points[0].lat + '|';
+                lonlats += points[1].lng + ',' + points[1].lat
+                var url = this.baseUrl + '?' + lonlats + '&format=' + this.format.gpx + '&trackname=' + trackName + '&alternativeidx=0&profile=' + BRouter.profile;
+                fetch(url).then(function (response) {
+                    response.blob().then(function (gpxFile) {
+                        fileProcessor(gpxFile);
+                    });
+                });
+            },
+
+            getGpxUrl(points, trackName) {
+                var lonlats = 'lonlats=';
+                lonlats += points[0].lng + ',' + points[0].lat + '|';
+                lonlats += points[1].lng + ',' + points[1].lat
+                var url = this.baseUrl + '?' + lonlats + '&format=' + this.format.gpx + '&trackname=' + trackName + '&alternativeidx=0&profile=' + website.extAPIs.BRouter.profile;
+                return url;
+            }
+
+        },
+    },
+
+    // all the meta stuff such as url updates
+
+    checkUrl() {
+        var url = new URL(window.location);
+        var urlParams = url.searchParams;
+        var routeNeedsReload = false;
+        if (urlParams.get('a') != undefined) {
+            var startParam = urlParams.get('a').split(',');
+            if (startParam.length == 2) {
+                var startPoint = new Point(startParam[0], startParam[1]);
+                if (website.points[0] != startPoint) {
+                    website.points[0] = startPoint;
+                    website.extAPIs.Graphhopper.getReversedGeoCodeSuggestion(startPoint, function (json) {
+                        $('#point-input-A').val(json.hits[0].name);
+                        $('#point-input-A').data('geoLocation', json.hits[0]);
+                    });
+                    website.markers[0] = website.extAPIs.Leaflet.addMarker(website.points[0]);
+                    routeNeedsReload = true;
+                }
+            }
         }
+        if (urlParams.get('b') != undefined) {
+            var endParam = urlParams.get('b').split(',');
+            if (endParam.length == 2) {
+                var endPoint = new Point(endParam[0], endParam[1]);
+                if (this.points[1] != endPoint) {
+                    this.points[1] = endPoint;
+                    this.extAPIs.Graphhopper.getReversedGeoCodeSuggestion(endPoint, function (json) {
+                        $('#point-input-B').val(json.hits[0].name);
+                        $('#point-input-B').data('geoLocation', json.hits[0]);
+                    });
+                    this.markers[1] = this.extAPIs.Leaflet.addMarker(this.points[1]);
+                    routeNeedsReload = true;
+                }
+            }
+        }
+        if (routeNeedsReload && this.points[0] != undefined && this.points[1] != undefined) {
+            this.map.fitBounds(this.points, {
+                maxZoom: 14,
+                animate: true,
+            });
+            this.extAPIs.Leaflet.removeLayer(this.currentPath);
+            this.changeGoButtonStatus(false);
+            this.showCancelButton();
+            this.showPath(this.points);
+        }
+    },
 
-    }
+    updateUrl(points) {
+        var url = new URL(window.location);
+        var urlParams = url.searchParams;
+        urlParams.set('a', points[0].lat + ',' + points[0].lng);
+        urlParams.set('b', points[1].lat + ',' + points[1].lng);
+        url.searchParams = urlParams;
+        window.history.pushState('myData', 'New Route', url.pathname + url.search);
+    },
+
+    // everything that belongs into the sidebar
 
     /**
      * close all geo suggestion popups (there should never be more than one)
      */
-    function closeAllGeoSuggestions() {
+    closeAllGeoSuggestions() {
         $('.autocomplete-items').remove()
-    }
+    },
 
-    /**
-     * add listener for user inputs on start point
-     */
-    $('#start-point-input').on('input', function () {
-        showGeoSuggestion('#start-point-input', $(this).val(), points);
-    });
-
-    /**
-     * add listener for user inputs on end point
-     */
-    $('#end-point-input').on('input', function () {
-        showGeoSuggestion('#end-point-input', $(this).val(), points);
-    });
-
-    /**
-     * add listener to a click somewhere to close geo suggestions
-     */
-    $(document).on('click', function () {
-        closeAllGeoSuggestions();
-    });
-
-    /**
-     * close geo suggestions on ESC
-     */
-    $(document).keydown(function (event) {
-        if (event.which == 27) {
-            closeAllGeoSuggestions();
-        }
-    });
-
-    /**
-     * calculate route by click on the specified button
-     */
-    $('#calculate-route-button').on('click', function () {
-        if (points.length != 2) {
-            return;
-        }
-        Leaflet.removeLayer(currentPath);
-        updateUrl(points);
-        changeGoButtonStatus(false);
-        showCancelButton();
-        showPath(points);
-    });
-
-    $(window).on('popstate', function (event) {
-        checkUrl();
-    });
-
-    $('#swap-route-input-button').on('click', function () {
-        var startPoint = points[0];
-        var startMarker = markers[0];
-        var startText = $('#start-point-input').val();
-
-        points[0] = points[1];
-        markers[0] = markers[1];
-        $('#start-point-input').val($('#end-point-input').val());
-
-        points[1] = startPoint;
-        markers[1] = startMarker;
-        $('#end-point-input').val(startText);
-    })
-
-    /**
+    /*
      *   get suggested geo locations based on user input
      */
-    function showGeoSuggestion(inputFieldId, input, points) {
+    showGeoSuggestion(inputFieldId, input, points) {
         // wait for the third letter from user
         if (input.length > 2) {
-            Graphhopper.getGeoCodeSuggestion(input, function (json) {
+            website.extAPIs.Graphhopper.getGeoCodeSuggestion(input, function (json) {
+                website.closeAllGeoSuggestions();
                 // close old suggestions before new one will be created
-                closeAllGeoSuggestions();
                 var hits = json.hits;
 
                 // ##### create html structure
-                var a = document.createElement('DIV');
-                a.setAttribute('id', inputFieldId + 'autocomplete-list');
-                a.setAttribute('class', 'autocomplete-items text-dark')
-                $(inputFieldId).after(a);
+                var hitElementsWrapper = $('<div></div>', {
+                    'class': 'autocomplete-items text-dark',
+                    'id': inputFieldId.attr('id') + '-autocomplete-list'
+                }).insertAfter(inputFieldId);
 
                 for (var i = 0; i < hits.length; i++) {
                     var hit = hits[i];
-                    var b = document.createElement('DIV');
-                    b.setAttribute('data-hit-id', i);
-                    b.innerHTML = hit.name;
-                    var subB = '';
-                    subB += (hit.street == undefined ? '' : hit.street + ', ');
-                    subB += (hit.city == undefined ? '' : hit.city + ', ');
-                    subB += (hit.state == undefined ? '' : hit.state + ', ');
-                    subB += hit.country;
-                    b.innerHTML += '<br><i><small>' + subB + '</small></i>';
-                    b.innerHTML += '<input type="hidden" value="' + hit.name + '">';
-                    b.addEventListener('click', function (e) {
-                        $(inputFieldId).val(this.getElementsByTagName('input')[0].value);
-                        closeAllGeoSuggestions();
-                        var pointIndex = $(inputFieldId).data('point-order');
-                        Leaflet.removeLayer(markers[pointIndex]);
-                        var geoLocation = hits[this.getAttribute('data-hit-id')];
-                        points[pointIndex] = geoLocation.point;
-                        markers[pointIndex] = Leaflet.addMarker(points[pointIndex]);
-                        map.fitBounds(points, {
+                    var hitElemHtml = hit.name;
+                    hitElemHtml += '<br><i><small>';
+                    hitElemHtml += (hit.street == undefined ? '' : hit.street + ', ');
+                    hitElemHtml += (hit.city == undefined ? '' : hit.city + ', ');
+                    hitElemHtml += (hit.postcode == undefined ? '' : hit.postcode + ' ');
+                    hitElemHtml += (hit.state == undefined ? '' : hit.state + ', ');
+                    hitElemHtml += hit.country;
+                    hitElemHtml += '</small></i>';
+                    hitElemHtml += '<input type="hidden" value="' + hit.name + '">';
+                    var hitElem = $('<div></div>', {
+                        'html': hitElemHtml
+                    });
+                    $(hitElem).attr('hitIdx', i);
+                    hitElem.on('click', function () {
+                        var pointIdx = 0;
+                        $('.point-input').each(function (idx) {
+                            if ($(this).is(inputFieldId)) {
+                                pointIdx = idx;
+                            }
+                        });
+                        website.closeAllGeoSuggestions();
+                        var geoLocation = hits[$(this).attr('hitIdx')];
+                        $(inputFieldId).data('geoLocation', geoLocation);
+                        $(inputFieldId).val(geoLocation.name);
+                        website.points[pointIdx] = geoLocation.point;
+
+                        website.extAPIs.Leaflet.removeLayer(website.markers[pointIdx]);
+                        website.markers[pointIdx] = website.extAPIs.Leaflet.addMarker(website.points[pointIdx]);
+                        website.map.fitBounds(website.points, {
                             maxZoom: 14,
                             animate: true
                         });
                     });
-                    a.appendChild(b);
+                    hitElem.appendTo(hitElementsWrapper);
                 }
             });
         }
-    }
+    },
 
-    function showCancelButton() {
+    showCancelButton() {
         $('#cancel-route-calc-wrapper').append('<button type="button" id="cancel-route-calc-button" class="btn btn-danger btn-block">Cancel</button>');
         $('#cancel-route-calc-button').on('click', function () {
-            abortController.abort();
-            abortController = new AbortController();
-            changeGoButtonStatus(true);
-            removeElevationProfile();
-            removeCancelButton();
+            website.abortController.abort();
+            website.abortController = new AbortController();
+            website.changeGoButtonStatus(true);
+            website.removeElevationProfile();
+            website.removeCancelButton();
         });
-    }
+    },
 
-    function removeCancelButton() {
+    removeCancelButton() {
         $('#cancel-route-calc-button').remove();
-    }
-
-    function showPath(points) {
-        $('#sidebar-details-wrapper').empty();
-        BRouter.getPath(points, function (json) {
-            currentPath = Leaflet.addPath(json.features[0].geometry);
-            removeCancelButton();
-            map.fitBounds(points);
-            showDetails(json.features[0].properties);
-            showDownloadButton(points);
-            showElevationProfile(json.features[0].geometry.coordinates);
-        }, function (error) {
-            changeGoButtonStatus(true);
-            if (error.name != "AbortError") {
-                $('#route-error-modal > .modal-dialog > .modal-content > .modal-body > p').empty();
-                console.log(error.message);
-                $('#route-error-modal > .modal-dialog > .modal-content > .modal-body > p').append(error.message);
-                $('#route-error-modal').modal();
-            }
-        });
-    }
+    },
 
     /**
      * display route instructions on sidebar
      */
-    function showDetails(properties) {
-        changeGoButtonStatus(true);
+    showDetails(properties) {
+        this.changeGoButtonStatus(true);
         // $('#sidebar-details-wrapper').empty();
         var table = '<table class="table table-dark table-borderless"><tbody>';
 
@@ -362,33 +428,55 @@ $(document).ready(function () {
 
         table += '</tbody></table>';
         $('#sidebar-details-wrapper').append(table);
-    }
+    },
 
-    function showDownloadButton(points) {
+    showDownloadButton(points) {
         var startPoint = $('#start-point-input').val();
         var endPoint = $('#end-point-input').val();
         var trackName = startPoint + '_' + endPoint;
-        var button = '<a href="' + BRouter.getGpxUrl(points, trackName) + '" id="download-route-button" role="button" class="btn btn-primary btn-block">Download as GPX</a>';
+        var button = '<a href="' + this.extAPIs.BRouter.getGpxUrl(points, trackName) + '" id="download-route-button" role="button" class="btn btn-primary btn-block">Download as GPX</a>';
         $('#sidebar-details-wrapper').append(button);
-    }
+    },
 
-    function changeGoButtonStatus(isEnabled) {
+    changeGoButtonStatus(isEnabled) {
+        $('#calculate-route-button').empty();
         if (isEnabled) {
-            $('#calculate-route-button').empty();
             $('#calculate-route-button').append('Go');
-            $('#calculate-route-button').prop('disabled', false);
         } else {
-            $('#calculate-route-button').empty();
             $('#calculate-route-button').append('<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Loading...');
-            $('#calculate-route-button').prop('disabled', true);
         }
-    }
+        $('#calculate-route-button').prop('disabled', !isEnabled);
+    },
 
-    function showElevationProfile(coordinates) {
+    // everything that belongs to the map
+
+    showPath(points) {
+        $('#sidebar-details-wrapper').empty();
+        website.extAPIs.BRouter.getPath(points, function (json) {
+            website.currentPath = website.extAPIs.Leaflet.addPath(json.features[0].geometry);
+            website.removeCancelButton();
+            website.map.fitBounds(points);
+            website.showDetails(json.features[0].properties);
+            website.showDownloadButton(points);
+            website.showElevationProfile(json.features[0].geometry.coordinates);
+        }, function (error) {
+            website.changeGoButtonStatus(true);
+            if (error.name != "AbortError") {
+                $('#route-error-modal > .modal-dialog > .modal-content > .modal-body > p').empty();
+                console.log(error.message);
+                $('#route-error-modal > .modal-dialog > .modal-content > .modal-body > p').append(error.message);
+                $('#route-error-modal').modal();
+            }
+        });
+    },
+
+    // everything that belongs to the elevation profile
+
+    showElevationProfile(coordinates) {
         $('#elev-profile-chart-wrapper').empty();
         $('#elev-profile-chart-wrapper').append('<canvas id="elev-profile-chart"></canvas>');
         $('#sidebar-details-wrapper').append('<p id="elev-hint">↧ Scroll for elevation profile ↧</p>');
-        var points = convertMessagesToPointsForChart(coordinates);
+        var points = this.convertMessagesToPointsForChart(coordinates);
         new Chart($('#elev-profile-chart'), {
             type: 'line',
             data: {
@@ -444,14 +532,14 @@ $(document).ready(function () {
                 responsive: true
             }
         });
-    }
+    },
 
-    function removeElevationProfile() {
+    removeElevationProfile() {
         $('#elev-profile-chart-wrapper').empty();
         $('#elev-profile-chart-wrapper').append('<h3 class="text-center>Enter a Route to get the elevation profile<h3>');
-    }
+    },
 
-    function convertMessagesToPointsForChart(coordinates) {
+    convertMessagesToPointsForChart(coordinates) {
         var points = new Array(coordinates.length - 1);
         var distanceSum = 0;
         points[0] = {
@@ -474,66 +562,5 @@ $(document).ready(function () {
             }
         }
         return points;
-    }
-
-    function checkUrl() {
-        var url = new URL(window.location);
-        var urlParams = url.searchParams;
-        var routeNeedsReload = false;
-        if (urlParams.get('start') != undefined) {
-            var startParam = urlParams.get('start').split(',');
-            if (startParam.length == 2) {
-                var startPoint = new Point(startParam[0], startParam[1]);
-                if (points[0] != startPoint) {
-                    points[0] = startPoint;
-                    Graphhopper.getReversedGeoCodeSuggestion(startPoint, function (json) {
-                        $('#start-point-input').val(json.hits[0].name);
-                    });
-                    markers[0] = Leaflet.addMarker(points[0]);
-                    routeNeedsReload = true;
-                }
-            }
-        }
-        if (urlParams.get('end') != undefined) {
-            var endParam = urlParams.get('end').split(',');
-            if (endParam.length == 2) {
-                var endPoint = new Point(endParam[0], endParam[1]);
-                if (points[1] != endPoint) {
-                    points[1] = endPoint;
-                    Graphhopper.getReversedGeoCodeSuggestion(endPoint, function (json) {
-                        $('#end-point-input').val(json.hits[0].name);
-                    });
-                    markers[1] = Leaflet.addMarker(points[1]);
-                    routeNeedsReload = true;
-                }
-            }
-        }
-        map.fitBounds(points, {
-            maxZoom: 14,
-            animate: true
-        });
-        if (routeNeedsReload && points[0] != undefined && points[1] != undefined) {
-            Leaflet.removeLayer(currentPath);
-            changeGoButtonStatus(false);
-            showCancelButton();
-            showPath(points);
-        }
-    }
-
-    function updateUrl(points) {
-        var url = new URL(window.location);
-        var urlParams = url.searchParams;
-        urlParams.set('start', points[0].lat + ',' + points[0].lng);
-        urlParams.set('end', points[1].lat + ',' + points[1].lng);
-        url.searchParams = urlParams;
-        window.history.pushState('myData', 'Neue Route', url.pathname + url.search);
-    }
-
-    Leaflet.initMap();
-    BRouter.initProfile();
-    // wait until profile is loaded
-    $(document).on('BRouterProfileChanged', function () {
-        console.log('profile ' + BRouter.profile + ' is loaded');
-        checkUrl();
-    });
-});
+    },
+}

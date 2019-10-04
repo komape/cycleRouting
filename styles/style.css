@@ -17,15 +17,23 @@
 #sidebar-header {
     font-weight: bolder;
     font-family: 'Courier New', Courier, monospace;
-    margin-top: .5em;
+    margin-top: .5rem;
 }
 
 form {
-    margin-top: .5em;
+    margin-top: .5rem;
 }
 
-.form-row {
-    margin-bottom: .5em !important;
+.form-group {
+    margin-bottom: .5rem !important;
+}
+
+.point-input-wrapper {
+    padding-left: 5px !important;
+}
+
+.btn-sq {
+    width: 38px;
 }
 
 .autocomplete {
@@ -53,12 +61,9 @@ form {
     border-bottom: 1px solid #d4d4d4;
 }
 
-.autocomplete-items div:hover {
-    /*when hovering an item:*/
-    background-color: #e9e9e9;
-}
-
+.autocomplete-items div:hover,
 .autocomplete-active {
+    /*when hovering an item:*/
     /*when navigating through the items using the arrow keys:*/
     background-color: DodgerBlue !important;
     color: #ffffff;
