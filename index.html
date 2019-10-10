@@ -56,70 +56,70 @@
 
     <!-- actual website -->
     <div id="website" class="container-fluid text-light bg-dark">
-        <div class="row" id="main-row">
+        <div class="row fullHeight" id="main-row">
             <div class="col-xs-12 col-sm-12 col-md-4 col-lg-3 col-xl-3" id="sidebar-wrapper">
-                <div class="row fullHeight">
-                    <div class="col-12">
-                        <header>
-                            <div class="row">
-                                <div class="col" id="sidebar-header-wrapper">
-                                    <h2 id="sidebar-header">CycleRouting</h2>
-                                </div>
-                            </div>
-                        </header>
-                        <div class="row">
-                            <div class="col" id="sidebar-route-input-wrapper">
-                                <form autocomplete="off" id="route-form">
-                                    <div class="form-row">
-                                        <div class="col">
-                                            <input class="form-control point-input" type="search" name="start-point"
-                                                id="start-point-input" placeholder="Start" data-point-order="0">
-                                        </div>
-                                    </div>
-                                    <div class="form-row">
-                                        <div class="col">
-                                            <input class="form-control point-input" type="search" name="end-point"
-                                                id="end-point-input" placeholder="Ziel" data-point-order="1">
-                                        </div>
-                                    </div>
-                                    <div class="form-row align-items-center">
-                                        <div class="col">
-                                            <button type="button" id="calculate-route-button"
-                                                class="btn btn-success btn-block">Go</button>
-                                        </div>
-                                        <div class="col-auto">
-                                            <button type="button" id="swap-route-input-button"
-                                                class="btn btn-primary">⇅</button>
-                                        </div>
-                                    </div>
-                                    <div class="form-row align-items-center">
-                                        <div class="col" id="cancel-route-calc-wrapper">
-                                        </div>
-                                    </div>
-                                </form>
-                            </div>
+                <header>
+                    <div class="row">
+                        <div class="col" id="sidebar-header-wrapper">
+                            <h2 id="sidebar-header">CycleRouting</h2>
                         </div>
-                        <div class="row">
-                            <div class="col">
-                                <div id="sidebar-details-wrapper">
+                    </div>
+                </header>
+                <div class="row">
+                    <div class="col" id="sidebar-route-input-wrapper">
+                        <form autocomplete="off" id="route-form">
+                            <div class="form-group row">
+                                <label for="point-A" class="col-1 col-form-label">A</label>
+                                <div class="col point-input-wrapper">
+                                    <input class="form-control point-input" type="search" name="point-A"
+                                        id="point-input-A" placeholder="Enter starting point" data-pointid="a">
                                 </div>
                             </div>
-                        </div>
-                        <footer>
-                            <div class="row">
-                                <div class="col text-light" id="sidebar-footer-wrapper">
-                                    <a id="sidebar-footer-impressum" class="text-light font-weight-light" href="../index.html"
-                                        target="_blank">Contact</a>
-                                    |
-                                    <a id="sidebar-footer-impressum" class="text-light font-weight-light" href="about.html"
-                                        target="_blank">About</a>
+                            <div class="form-group row">
+                                <label for="point-B" class="col-1 col-form-label">B</label>
+                                <div class="col point-input-wrapper">
+                                    <input class="form-control point-input" type="search" name="point-B"
+                                        id="point-input-B" placeholder="Enter destination" data-pointid="b">
                                 </div>
                             </div>
-                        </footer>
+                            <div class="form-row align-items-center">
+                                <div class="col">
+                                    <button type="button" id="calculate-route-button"
+                                        class="btn btn-success btn-block">Go</button>
+                                </div>
+                                <div class="col-auto">
+                                    <button type="button" id="swap-route-input-button"
+                                        class="btn btn-primary">⇅</button>
+                                </div>
+                                <div class="col-auto">
+                                    <button type="button" id="add-route-point-button"
+                                        class="btn btn-primary font-weight-bold">&#x2b;</button>
+                                </div>
+                            </div>
+                            <div class="form-row align-items-center">
+                                <div class="col" id="cancel-route-calc-wrapper">
+                                </div>
+                            </div>
+                        </form>
                     </div>
                 </div>
+                <div class="row">
+                    <div class="col">
+                        <div id="sidebar-details-wrapper">
+                        </div>
+                    </div>
+                </div>
+                <footer class="row fixed-bottom">
+                    <div class="col text-light" id="sidebar-footer-wrapper">
+                        <a id="sidebar-footer-impressum" class="text-light text-decoration-none font-weight-light"
+                            href="https://www.user.tu-berlin.de/konstantinpelz/" target="_blank">Contact</a>
+                        |
+                        <a id="sidebar-footer-impressum" class="text-light text-decoration-none font-weight-light"
+                            href="about.html" target="_blank">About</a>
+                    </div>
+                </footer>
             </div>
-            <div class="col fullHeight" id="map-wrapper">
+            <div class="col-xs-12 col-sm-12 col-md-8 col-lg-9 col-xl-9" id="map-wrapper">
                 <div id="map"></div>
             </div>
         </div>
@@ -131,16 +131,13 @@
     </div>
 
     <!-- jquery -->
-    <script src="https://code.jquery.com/jquery-3.4.1.min.js"
-        integrity="sha256-CSXorXvZcTkaix6Yvo6HppcZGetbYMGWSFlBw8HfCJo=" crossorigin="anonymous"></script>
+    <script src="libs/jQuery/jquery-3.3.1.js"></script>
     <!-- popper -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.14.7/umd/popper.min.js"
         integrity="sha384-UO2eT0CpHqdSJQ6hJty5KVphtPhzWj9WO1clHTMGa3JDZwrnQq4sF86dIHNDz0W1"
         crossorigin="anonymous"></script>
     <!-- bootstrap -->
-    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/js/bootstrap.min.js"
-        integrity="sha384-JjSmVgyd0p3pXB1rRibZUAYoIIy6OrQ6VrjIEaFf/nJGzIxFDsf4x0xIM+B07jRM"
-        crossorigin="anonymous"></script>
+    <script src="libs/bootstrap/js/bootstrap.min.js"></script>
     <!-- leaflet -->
     <script src="https://unpkg.com/leaflet@1.5.1/dist/leaflet.js"
         integrity="sha512-GffPMF3RvMeYyc1LWMHtK8EbPv0iNZ8/oTtHPx9/cc2ILxQ+u905qIwdpULaqDkyBKgOaB57QTMg7ztg8Jm2Og=="
@@ -149,7 +146,8 @@
     <!-- graphhopper -->
     <script src="https://cdn.jsdelivr.net/npm/graphhopper-js-api-client/dist/graphhopper-client.js"></script>
     <!-- chart.js -->
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@2.8.0/dist/Chart.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/2.8.0/Chart.bundle.min.js"
+        integrity="sha256-xKeoJ50pzbUGkpQxDYHD7o7hxe0LaOGeguUidbq6vis=" crossorigin="anonymous"></script>
     <!-- our script -->
     <script src="scripts/main.js"></script>
 </body>

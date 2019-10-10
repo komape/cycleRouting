@@ -195,10 +195,10 @@ assign costfactor
   #
   else if ( is_ldcr ) then 
   (
-    if 		  ( route_bicycle_icn=yes ) then 1                   # always treated as perfect (=1)
-    else if ( route_bicycle_ncn=yes )	then 1.2
-    else if ( route_bicycle_rcn=yes )	then 1.5
-    else if ( route_bicycle_lcn=yes )	then 1.8
+    if 		  ( route_bicycle_icn=yes ) then 0.2 # always treated as perfect (=1)
+    else if ( route_bicycle_ncn=yes )	then 0.3
+    else if ( route_bicycle_rcn=yes )	then 1.0
+    else if ( route_bicycle_lcn=yes )	then 1.0
     else 2
   )
   else
