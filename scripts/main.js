@@ -66,18 +66,14 @@ $(document).ready(function () {
     });
 
     $('#route-form').on('click', '.remove-input-btn', function () {
-        console.log('remove input btn clicked');
         const pointId = $(this).parent().prev().children().data('pointid');
-        console.log(pointId);
         website.points.stopovers.splice(pointId, 1);
         const removedMarker = website.markers.stopovers.splice(pointId, 1)
         website.extAPIs.Leaflet.removeLayer(removedMarker[0]);
         $(this).parent().parent().remove();
         $('.stopover-input').each(function (stopoverIdx, elem) {
-            console.log(stopoverIdx)
             if (stopoverIdx >= pointId) {
                 $(this).attr('name', `point-${+stopoverIdx + 1}`);
-                console.log($(this).attr('data-pointid'));
                 $(this).attr('data-pointId', stopoverIdx);
                 $(this).parent().prev().attr('for', `point-${+stopoverIdx + 1}`).text(+stopoverIdx + 1);
             }
@@ -229,7 +225,7 @@ var website = {
                     body: text
                 }).then(function (response) {
                     response.json().then(function (json) {
-                        website.extAPIs.BRouter.profile = json.profileid;
+                        website.extAPIs.BRouter.profileId = json.profileid;
                         var event = $.Event('BRouterProfileChanged', {
                             profileId: json.profileid
                         });
@@ -525,8 +521,6 @@ var website = {
                             website.extAPIs.Leaflet.removeLayer(website.markers.stopovers[pointId]);
                             website.markers.stopovers[pointId] = marker;
                         }
-                        console.log(website.points)
-                        console.log(website.markers)
                         website.fitBounds();
                     });
                     hitElem.appendTo(hitElementsWrapper);
