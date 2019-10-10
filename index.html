@@ -63,7 +63,7 @@
                         <header>
                             <div class="row">
                                 <div class="col" id="sidebar-header-wrapper">
-                                    <h2 id="sidebar-header">CycleRouting</h2>
+                                    <h2 id="sidebar-header">Long Distance Cycle Routing</h2>
                                 </div>
                             </div>
                         </header>
@@ -74,15 +74,14 @@
                                         <label for="point-A" class="col-1 col-form-label">A</label>
                                         <div class="col point-input-wrapper">
                                             <input class="form-control point-input" type="search" name="point-A"
-                                                id="point-input-A" placeholder="Enter starting point"
-                                                data-point-order="0">
+                                                id="point-input-A" placeholder="Enter starting point" data-pointid="a">
                                         </div>
                                     </div>
                                     <div class="form-group row">
                                         <label for="point-B" class="col-1 col-form-label">B</label>
                                         <div class="col point-input-wrapper">
                                             <input class="form-control point-input" type="search" name="point-B"
-                                                id="point-input-B" placeholder="Enter destination" data-point-order="2">
+                                                id="point-input-B" placeholder="Enter destination" data-pointid="b">
                                         </div>
                                     </div>
                                     <div class="form-row align-items-center">
@@ -96,7 +95,7 @@
                                         </div>
                                         <div class="col-auto">
                                             <button type="button" id="add-route-point-button"
-                                                class="btn btn-primary font-weight-bold">+</button>
+                                                class="btn btn-primary font-weight-bold">&#x2b;</button>
                                         </div>
                                     </div>
                                     <div class="form-row align-items-center">
@@ -112,23 +111,21 @@
                                 </div>
                             </div>
                         </div>
-                        <footer>
-                            <div class="row">
-                                <div class="col text-light" id="sidebar-footer-wrapper">
-                                    <a id="sidebar-footer-impressum"
-                                        class="text-light text-decoration-none font-weight-light"
-                                        href="https://www.user.tu-berlin.de/konstantinpelz/" target="_blank">Contact</a>
-                                    |
-                                    <a id="sidebar-footer-impressum"
-                                        class="text-light text-decoration-none font-weight-light" href="about.html"
-                                        target="_blank">About</a>
-                                </div>
+                        <footer class="row">
+                            <div class="col text-light" id="sidebar-footer-wrapper">
+                                <a id="sidebar-footer-impressum"
+                                    class="text-light text-decoration-none font-weight-light"
+                                    href="https://www.user.tu-berlin.de/konstantinpelz/" target="_blank">Contact</a>
+                                |
+                                <a id="sidebar-footer-impressum"
+                                    class="text-light text-decoration-none font-weight-light" href="about.html"
+                                    target="_blank">About</a>
                             </div>
                         </footer>
                     </div>
                 </div>
             </div>
-            <div class="col fullHeight" id="map-wrapper">
+            <div class="col-xs-12 col-sm-12 col-md-8 col-lg-9 col-xl-9 fullHeight" id="map-wrapper">
                 <div id="map"></div>
             </div>
         </div>

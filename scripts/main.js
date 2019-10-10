@@ -6,11 +6,14 @@ $(document).ready(function () {
     $(document).on('BRouterProfileChanged', function () {
         console.log('profile ' + website.extAPIs.BRouter.profileId + ' is loaded');
         website.checkUrl();
+        if (website.points.a != undefined && website.points.b != undefined) {
+            website.startRouteCalculation();
+        }
     });
 
     // ####### listeners for geo suggestion handling
     $('#route-form').on('input', '.point-input', function () {
-        website.showGeoSuggestion($(this), $(this).val(), website.points);
+        website.showGeoSuggestion($(this), $(this).val());
     });
 
     $(document).on('click', function () {
@@ -28,49 +31,57 @@ $(document).ready(function () {
      * calculate route button listener
      */
     $('#calculate-route-button').on('click', function () {
-        if (website.points.length < 2) {
+        if (website.points.a == undefined || website.points.b == undefined) {
             return;
         }
+        website.updateUrl();
         website.extAPIs.Leaflet.removeLayer(website.currentPath);
-        website.updateUrl(website.points);
-        website.changeGoButtonStatus(false);
-        website.showCancelButton();
-        website.showPath(website.points);
+        website.startRouteCalculation();
     });
 
     $(window).on('popstate', function (event) {
         website.checkUrl();
+        if (website.points.a != undefined && website.points.b != undefined) {
+            website.startRouteCalculation();
+        }
     });
 
     $('#swap-route-input-button').on('click', function () {
-        var startPoint = website.points[0];
-        var startMarker = website.markers[0];
+        var startPoint = website.points.a;
+        var startMarker = website.markers.a;
         var startText = $('#point-input-A').val();
 
-        website.points[0] = website.points[1];
-        website.markers[0] = website.markers[1];
+        website.points.a = website.points.b;
+        website.markers.a = website.markers.b;
         $('#point-input-A').val($('#point-input-B').val());
 
-        website.points[1] = startPoint;
-        website.markers[1] = startMarker;
+        website.points.b = startPoint;
+        website.markers.b = startMarker;
         $('#point-input-B').val(startText);
     });
 
     $('#add-route-point-button').on('click', function () {
-        var formRowString = '<div class="form-group row">';
-        formRowString += '<label for="point-1" class="col-1 col-form-label">1</label>';
-        formRowString += '<div class="col point-input-wrapper" style="padding-right: 2px">';
-        formRowString += '<input class="form-control point-input" type="search" name="point-1" placeholder="Zwischenziel">';
-        formRowString += '</div>';
-        formRowString += '<div class="col-2" style="padding-left: 2px">';
-        formRowString += '<button type="button" class="btn btn-danger btn-block remove-input-btn font-weight-bold">&#xd7;</button>';
-        formRowString += '</div>';
-        formRowString += '</div>';
-        $('#point-input-B').parent().parent().before(formRowString);
+        var stopoverIdx = $('.stopover-input').length;
+        website.addStopoverInput(stopoverIdx);
     });
 
     $('#route-form').on('click', '.remove-input-btn', function () {
+        console.log('remove input btn clicked');
+        const pointId = $(this).parent().prev().children().data('pointid');
+        console.log(pointId);
+        website.points.stopovers.splice(pointId, 1);
+        const removedMarker = website.markers.stopovers.splice(pointId, 1)
+        website.extAPIs.Leaflet.removeLayer(removedMarker[0]);
         $(this).parent().parent().remove();
+        $('.stopover-input').each(function (stopoverIdx, elem) {
+            console.log(stopoverIdx)
+            if (stopoverIdx >= pointId) {
+                $(this).attr('name', `point-${+stopoverIdx + 1}`);
+                console.log($(this).attr('data-pointid'));
+                $(this).attr('data-pointId', stopoverIdx);
+                $(this).parent().prev().attr('for', `point-${+stopoverIdx + 1}`).text(+stopoverIdx + 1);
+            }
+        });
     });
 });
 
@@ -86,8 +97,16 @@ var website = {
     map: undefined,
 
     // points for path
-    points: new Array(),
-    markers: new Array(),
+    points: {
+        a: undefined,
+        b: undefined,
+        stopovers: []
+    },
+    markers: {
+        a: undefined,
+        b: undefined,
+        stopovers: []
+    },
 
     // current shown path
     currentPath: undefined,
@@ -158,11 +177,11 @@ var website = {
                 });
             },
 
-            getReversedGeoCodeSuggestion(point, jsonProcessor) {
+            getReversedGeoCodeSuggestion(point, jsonProcessor, index) {
                 var url = this.baseUrl + this.geocodeUrl + '?key=' + this.apiKey + '&reverse=true&limit=1&point=' + point.lat + ',' + point.lng;
                 fetch(url).then(function (response) {
                     response.json().then(function (json) {
-                        jsonProcessor(json);
+                        jsonProcessor(json, index);
                     });
                 });
             },
@@ -219,33 +238,72 @@ var website = {
                 });
             },
 
-            getPath(points, jsonProcessor, errorProcessor) {
-                var lonlats = 'lonlats=';
-                lonlats += points[0].lng + ',' + points[0].lat + '|';
-                lonlats += points[1].lng + ',' + points[1].lat
-                var url = this.baseUrl + '?' + lonlats + '&format=' + this.format.geojson + '&alternativeidx=0&profile=' + this.profileId;
-                fetch(url, {
+            async getWholePath(points, errorProcessor) {
+                var path = {
+                    properties: {
+                        trackLength: 0,
+                        filteredAscend: 0,
+                        plainAscend: 0,
+                        totalTime: 0,
+                        cost: 0,
+                    },
+                    geometry: {
+                        type: 'LineString',
+                        coordinates: []
+                    }
+                };
+
+                if (points.stopovers == undefined || points.stopovers.length == 0) {
+                    var lonlats = 'lonlats=';
+                    lonlats += points.a.lng + ',' + points.a.lat + '|';
+                    lonlats += points.b.lng + ',' + points.b.lat
+                    const url = this.baseUrl + '?' + lonlats + '&format=' + this.format.geojson + '&alternativeidx=0&profile=' + this.profileId;
+                    const feature = await this.getPathSegement(url, errorProcessor);
+                    path = this.addFeatureToPath(path, feature);
+                } else {
+                    for (var i = 0; i <= points.stopovers.length; i++) {
+                        var lonlats = 'lonlats=';
+                        if (i == 0) {
+                            lonlats += points.a.lng + ',' + points.a.lat + '|';
+                            lonlats += points.stopovers[i].lng + ',' + points.stopovers[i].lat;
+                        } else if (i == points.stopovers.length) {
+                            lonlats += points.stopovers[i - 1].lng + ',' + points.stopovers[i - 1].lat + '|';
+                            lonlats += points.b.lng + ',' + points.b.lat;
+                        } else {
+                            lonlats += points.stopovers[i - 1].lng + ',' + points.stopovers[i - 1].lat + '|';
+                            lonlats += points.stopovers[i].lng + ',' + points.stopovers[i].lat;
+                        }
+                        const url = this.baseUrl + '?' + lonlats + '&format=' + this.format.geojson + '&alternativeidx=0&profile=' + this.profileId;
+                        const feature = await this.getPathSegement(url, errorProcessor);
+                        path = this.addFeatureToPath(path, feature);
+                    }
+                }
+                return path;
+            },
+
+            async getPathSegement(url, errorProcessor) {
+                var response = await fetch(url, {
                     signal: website.abortController.signal
-                }).then(response => {
+                });
+                try {
                     if (!response.ok) {
                         throw Error(response.status + ': ' + response.statusText);
                     }
                     if (response.headers.get('Content-Type').startsWith('text/plain')) {
                         throw Error('Content-Type: ' + response.headers.get('Content-Type'));
                     }
-                    return response.json();
-                }).then(json => {
-                    jsonProcessor(json);
-                }).catch(error => {
+                } catch (error) {
                     console.log(error);
                     errorProcessor(error);
-                });
+                }
+                var json = await response.json();
+                return json.features[0];
             },
 
             getGpxPath(points, trackName, fileProcessor) {
                 var lonlats = 'lonlats=';
-                lonlats += points[0].lng + ',' + points[0].lat + '|';
-                lonlats += points[1].lng + ',' + points[1].lat
+                lonlats += points.a.lng + ',' + points.a.lat + '|';
+                lonlats += points.b.lng + ',' + points.b.lat
                 var url = this.baseUrl + '?' + lonlats + '&format=' + this.format.gpx + '&trackname=' + trackName + '&alternativeidx=0&profile=' + BRouter.profile;
                 fetch(url).then(function (response) {
                     response.blob().then(function (gpxFile) {
@@ -256,10 +314,23 @@ var website = {
 
             getGpxUrl(points, trackName) {
                 var lonlats = 'lonlats=';
-                lonlats += points[0].lng + ',' + points[0].lat + '|';
-                lonlats += points[1].lng + ',' + points[1].lat
+                lonlats += points.a.lng + ',' + points.a.lat + '|';
+                lonlats += points.b.lng + ',' + points.b.lat
                 var url = this.baseUrl + '?' + lonlats + '&format=' + this.format.gpx + '&trackname=' + trackName + '&alternativeidx=0&profile=' + website.extAPIs.BRouter.profile;
                 return url;
+            },
+
+            addFeatureToPath(path, featureJson) {
+                path.properties.trackLength += +featureJson.properties['track-length'];
+                path.properties.filteredAscend += +featureJson.properties['filtered ascend'];
+                path.properties.plainAscend += +featureJson.properties['plain-ascend'];
+                path.properties.totalTime += +featureJson.properties['total-time'];
+                path.properties.totalEnergy += +featureJson.properties['total-energy'];
+                path.properties.cost += +featureJson.properties['cost'];
+
+                path.geometry.coordinates.push(...featureJson.geometry.coordinates);
+
+                return path;
             }
 
         },
@@ -275,54 +346,124 @@ var website = {
             var startParam = urlParams.get('a').split(',');
             if (startParam.length == 2) {
                 var startPoint = new Point(startParam[0], startParam[1]);
-                if (website.points[0] != startPoint) {
-                    website.points[0] = startPoint;
+                if (website.points.a != startPoint) {
+                    website.points.a = startPoint;
                     website.extAPIs.Graphhopper.getReversedGeoCodeSuggestion(startPoint, function (json) {
                         $('#point-input-A').val(json.hits[0].name);
                         $('#point-input-A').data('geoLocation', json.hits[0]);
                     });
-                    website.markers[0] = website.extAPIs.Leaflet.addMarker(website.points[0]);
+                    website.markers.a = website.extAPIs.Leaflet.addMarker(startPoint);
                     routeNeedsReload = true;
                 }
             }
+        }
+        var i = 0;
+        while (urlParams.has(i)) {
+            var stopoverParam = urlParams.get(i).split(',');
+            if (stopoverParam.length == 2) {
+                this.addStopoverInput(i);
+                var stopoverPoint = new Point(stopoverParam[0], stopoverParam[1]);
+                if (website.points.stopovers != stopoverPoint) {
+                    website.points.stopovers[i] = stopoverPoint;
+                    website.extAPIs.Graphhopper.getReversedGeoCodeSuggestion(stopoverPoint, function (json, idx) {
+                        $(`#point-input-${idx + 1}`).val(json.hits[0].name);
+                    }, i);
+                    website.markers.stopovers[i] = website.extAPIs.Leaflet.addMarker(stopoverPoint);
+                    routeNeedsReload = true;
+                }
+            }
+            i++;
         }
         if (urlParams.get('b') != undefined) {
             var endParam = urlParams.get('b').split(',');
             if (endParam.length == 2) {
                 var endPoint = new Point(endParam[0], endParam[1]);
-                if (this.points[1] != endPoint) {
-                    this.points[1] = endPoint;
+                if (this.points.b != endPoint) {
+                    this.points.b = endPoint;
                     this.extAPIs.Graphhopper.getReversedGeoCodeSuggestion(endPoint, function (json) {
                         $('#point-input-B').val(json.hits[0].name);
                         $('#point-input-B').data('geoLocation', json.hits[0]);
                     });
-                    this.markers[1] = this.extAPIs.Leaflet.addMarker(this.points[1]);
+                    this.markers.b = this.extAPIs.Leaflet.addMarker(endPoint);
                     routeNeedsReload = true;
                 }
             }
         }
-        if (routeNeedsReload && this.points[0] != undefined && this.points[1] != undefined) {
-            this.map.fitBounds(this.points, {
-                maxZoom: 14,
-                animate: true,
-            });
+        this.fitBounds();
+        if (routeNeedsReload && this.points.a != undefined && this.points.b != undefined) {
             this.extAPIs.Leaflet.removeLayer(this.currentPath);
-            this.changeGoButtonStatus(false);
-            this.showCancelButton();
-            this.showPath(this.points);
         }
     },
 
-    updateUrl(points) {
+    updateUrl() {
         var url = new URL(window.location);
         var urlParams = url.searchParams;
-        urlParams.set('a', points[0].lat + ',' + points[0].lng);
-        urlParams.set('b', points[1].lat + ',' + points[1].lng);
+
+        urlParams.delete('a')
+        if (this.points.a != undefined) {
+            const key = 'a';
+            urlParams.set(key, this.points.a.lat + ',' + this.points.a.lng);
+        }
+        var i = 0;
+        while (urlParams.has(i)) {
+            urlParams.delete(i++);
+        }
+        if (this.points.stopovers.length > 0) {
+            for (var i in this.points.stopovers) {
+                const point = this.points.stopovers[i];
+                const key = i;
+                urlParams.set(key, point.lat + ',' + point.lng);
+            }
+        }
+        urlParams.delete('b')
+        if (this.points.b != undefined) {
+            const key = 'b';
+            urlParams.set(key, this.points.b.lat + ',' + this.points.b.lng);
+        }
         url.searchParams = urlParams;
         window.history.pushState('myData', 'New Route', url.pathname + url.search);
     },
 
+    showErrorModal(error) {
+        $('#route-error-modal > .modal-dialog > .modal-content > .modal-body > p').empty();
+        console.log(error.message);
+        $('#route-error-modal > .modal-dialog > .modal-content > .modal-body > p').append(error.message);
+        $('#route-error-modal').modal();
+    },
+
+    async startRouteCalculation() {
+        this.changeGoButtonStatus(false);
+        this.showCancelButton();
+        $('#sidebar-details-wrapper').empty();
+        const path = await website.extAPIs.BRouter.getWholePath(this.points, function (error) {
+            website.changeGoButtonStatus(true);
+            if (error.name != 'AbortError') {
+                showErrorModal(error);
+            }
+        });
+        website.currentPath = website.extAPIs.Leaflet.addPath(path.geometry);
+        website.removeCancelButton();
+        website.fitBounds();
+        website.showDetails(path.properties);
+        website.showDownloadButton(this.points);
+        website.showElevationProfile(path.geometry.coordinates);
+    },
+
     // everything that belongs into the sidebar
+
+    addStopoverInput(stopoverIdx) {
+        var formRowString = '<div class="form-group row">';
+        formRowString += `<label for="point-${+stopoverIdx + 1}" class="col-1 col-form-label">${+stopoverIdx + 1}</label>`;
+        formRowString += '<div class="col point-input-wrapper" style="padding-right: 2px">';
+        formRowString += `<input class="form-control point-input stopover-input" type="search" name="point-${+stopoverIdx + 1}" id="point-input-${+stopoverIdx + 1}" placeholder="Zwischenziel" data-pointid="${stopoverIdx}">`;
+        formRowString += '</div>';
+        formRowString += '<div class="col-2" style="padding-left: 2px">';
+        formRowString += '<button type="button" class="btn btn-danger btn-block remove-input-btn font-weight-bold">&#xd7;</button>';
+        formRowString += '</div>';
+        formRowString += '</div>';
+        // $('#point-input-B').parent().parent().before(formRowString);
+        $('#route-form > div:nth-child(' + (stopoverIdx + 1) + ')').after(formRowString);
+    },
 
     /**
      * close all geo suggestion popups (there should never be more than one)
@@ -334,7 +475,7 @@ var website = {
     /*
      *   get suggested geo locations based on user input
      */
-    showGeoSuggestion(inputFieldId, input, points) {
+    showGeoSuggestion(inputField, input) {
         // wait for the third letter from user
         if (input.length > 2) {
             website.extAPIs.Graphhopper.getGeoCodeSuggestion(input, function (json) {
@@ -345,8 +486,8 @@ var website = {
                 // ##### create html structure
                 var hitElementsWrapper = $('<div></div>', {
                     'class': 'autocomplete-items text-dark',
-                    'id': inputFieldId.attr('id') + '-autocomplete-list'
-                }).insertAfter(inputFieldId);
+                    'id': inputField.attr('id') + '-autocomplete-list'
+                }).insertAfter(inputField);
 
                 for (var i = 0; i < hits.length; i++) {
                     var hit = hits[i];
@@ -364,24 +505,29 @@ var website = {
                     });
                     $(hitElem).attr('hitIdx', i);
                     hitElem.on('click', function () {
-                        var pointIdx = 0;
+                        var pointId = '';
                         $('.point-input').each(function (idx) {
-                            if ($(this).is(inputFieldId)) {
-                                pointIdx = idx;
+                            if ($(this).is(inputField)) {
+                                pointId = $(this).data('pointid');
                             }
                         });
                         website.closeAllGeoSuggestions();
                         var geoLocation = hits[$(this).attr('hitIdx')];
-                        $(inputFieldId).data('geoLocation', geoLocation);
-                        $(inputFieldId).val(geoLocation.name);
-                        website.points[pointIdx] = geoLocation.point;
-
-                        website.extAPIs.Leaflet.removeLayer(website.markers[pointIdx]);
-                        website.markers[pointIdx] = website.extAPIs.Leaflet.addMarker(website.points[pointIdx]);
-                        website.map.fitBounds(website.points, {
-                            maxZoom: 14,
-                            animate: true
-                        });
+                        var marker = website.extAPIs.Leaflet.addMarker(geoLocation.point);
+                        $(inputField).data('geoLocation', geoLocation);
+                        $(inputField).val(geoLocation.name);
+                        if (isNaN(pointId)) {
+                            website.points[pointId] = geoLocation.point;
+                            website.extAPIs.Leaflet.removeLayer(website.markers[pointId]);
+                            website.markers[pointId] = marker;
+                        } else {
+                            website.points.stopovers[pointId] = geoLocation.point;
+                            website.extAPIs.Leaflet.removeLayer(website.markers.stopovers[pointId]);
+                            website.markers.stopovers[pointId] = marker;
+                        }
+                        console.log(website.points)
+                        console.log(website.markers)
+                        website.fitBounds();
                     });
                     hitElem.appendTo(hitElementsWrapper);
                 }
@@ -412,18 +558,18 @@ var website = {
         // $('#sidebar-details-wrapper').empty();
         var table = '<table class="table table-dark table-borderless"><tbody>';
 
-        var distance = Math.round(properties['track-length'] / 100) / 10;
+        var distance = Math.round(properties.trackLength / 100) / 10;
         table += '<tr><th>Distance</th><td>' + distance + ' km</td></tr>';
 
-        var travelTime = Math.round(properties['total-time'] / 60);
+        var travelTime = Math.round(properties.totalTime / 60);
         var minutes = travelTime % 60;
         var hours = (travelTime - minutes) / 60;
         table += '<tr><th>Travel time</th><td>' + hours + 'h ' + minutes + 'min</td></tr>';
 
-        var elevationFiltered = properties['filtered ascend'];
+        var elevationFiltered = properties.filteredAscend;
         table += '<tr><th>Elevation overall</th><td>' + elevationFiltered + ' m</td></tr>';
 
-        var elevationPlain = properties['plain-ascend'];
+        var elevationPlain = properties.plainAscend;
         table += '<tr><th>Elevation simplified</th><td>' + elevationPlain + ' m</td></tr>';
 
         table += '</tbody></table>';
@@ -450,24 +596,23 @@ var website = {
 
     // everything that belongs to the map
 
-    showPath(points) {
-        $('#sidebar-details-wrapper').empty();
-        website.extAPIs.BRouter.getPath(points, function (json) {
-            website.currentPath = website.extAPIs.Leaflet.addPath(json.features[0].geometry);
-            website.removeCancelButton();
-            website.map.fitBounds(points);
-            website.showDetails(json.features[0].properties);
-            website.showDownloadButton(points);
-            website.showElevationProfile(json.features[0].geometry.coordinates);
-        }, function (error) {
-            website.changeGoButtonStatus(true);
-            if (error.name != "AbortError") {
-                $('#route-error-modal > .modal-dialog > .modal-content > .modal-body > p').empty();
-                console.log(error.message);
-                $('#route-error-modal > .modal-dialog > .modal-content > .modal-body > p').append(error.message);
-                $('#route-error-modal').modal();
-            }
-        });
+    fitBounds() {
+        var pointsArr = [];
+        if (this.points.a != undefined) {
+            pointsArr.push(this.points.a);
+        }
+        if (this.points.stopovers.length != 0) {
+            pointsArr.push(...this.points.stopovers);
+        }
+        if (this.points.b != undefined) {
+            pointsArr.push(this.points.b);
+        }
+        if (pointsArr.length != 0) {
+            this.map.fitBounds(pointsArr, {
+                maxZoom: 14,
+                animate: true
+            });
+        }
     },
 
     // everything that belongs to the elevation profile
@@ -542,7 +687,7 @@ var website = {
     convertMessagesToPointsForChart(coordinates) {
         var points = new Array(coordinates.length - 1);
         var distanceSum = 0;
-        points[0] = {
+        points.a = {
             x: distanceSum,
             y: coordinates[0][2]
         }

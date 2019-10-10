@@ -1,17 +1,21 @@
-.fullHeight {
-    height: 100vh;
-    padding: 0 !important;
-}
+@media(min-width:768px) {
 
-#map-wrapper {
-    position: relative;
-}
+    .fullHeight {
+        height: 100vh;
+        padding: 0 !important;
+    }
 
-#map {
-    position: absolute;
-    top: 0;
-    bottom: 0;
-    width: 100%;
+    #map-wrapper {
+        position: relative;
+    }
+
+    #map {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        width: 100%;
+    }
+
 }
 
 #sidebar-header {
