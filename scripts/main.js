@@ -235,6 +235,7 @@ var website = {
             },
 
             async getWholePath(points, errorProcessor) {
+                var isValidPath = false;
                 var path = {
                     properties: {
                         trackLength: 0,
@@ -255,7 +256,10 @@ var website = {
                     lonlats += points.b.lng + ',' + points.b.lat
                     const url = this.baseUrl + '?' + lonlats + '&format=' + this.format.geojson + '&alternativeidx=0&profile=' + this.profileId;
                     const feature = await this.getPathSegement(url, errorProcessor);
-                    path = this.addFeatureToPath(path, feature);
+                    if (feature != undefined) {
+                        path = this.addFeatureToPath(path, feature);
+                        isValidPath = true;
+                    }
                 } else {
                     for (var i = 0; i <= points.stopovers.length; i++) {
                         var lonlats = 'lonlats=';
@@ -271,10 +275,13 @@ var website = {
                         }
                         const url = this.baseUrl + '?' + lonlats + '&format=' + this.format.geojson + '&alternativeidx=0&profile=' + this.profileId;
                         const feature = await this.getPathSegement(url, errorProcessor);
-                        path = this.addFeatureToPath(path, feature);
+                        if (feature != undefined) {
+                            path = this.addFeatureToPath(path, feature);
+                            isValidPath = true;
+                        }
                     }
                 }
-                return path;
+                return isValidPath ? path : undefined;
             },
 
             async getPathSegement(url, errorProcessor) {
@@ -286,11 +293,13 @@ var website = {
                         throw Error(response.status + ': ' + response.statusText);
                     }
                     if (response.headers.get('Content-Type').startsWith('text/plain')) {
-                        throw Error('Content-Type: ' + response.headers.get('Content-Type'));
+                        let text = await response.text();
+                        throw Error(text);
                     }
                 } catch (error) {
                     console.log(error);
                     errorProcessor(error);
+                    return;
                 }
                 var json = await response.json();
                 return json.features[0];
@@ -429,20 +438,20 @@ var website = {
 
     async startRouteCalculation() {
         this.changeGoButtonStatus(false);
-        this.showCancelButton();
         $('#sidebar-details-wrapper').empty();
         const path = await website.extAPIs.BRouter.getWholePath(this.points, function (error) {
             website.changeGoButtonStatus(true);
             if (error.name != 'AbortError') {
-                showErrorModal(error);
+                website.showErrorModal(error);
             }
         });
-        website.currentPath = website.extAPIs.Leaflet.addPath(path.geometry);
-        website.removeCancelButton();
-        website.fitBounds();
-        website.showDetails(path.properties);
-        website.showDownloadButton(this.points);
-        website.showElevationProfile(path.geometry.coordinates);
+        if (path != undefined) {
+            website.currentPath = website.extAPIs.Leaflet.addPath(path.geometry);
+            website.fitBounds();
+            website.showDetails(path.properties);
+            website.showDownloadButton(this.points);
+            website.showElevationProfile(path.geometry.coordinates);
+        }
     },
 
     // everything that belongs into the sidebar
@@ -536,7 +545,6 @@ var website = {
             website.abortController = new AbortController();
             website.changeGoButtonStatus(true);
             website.removeElevationProfile();
-            website.removeCancelButton();
         });
     },
 
@@ -582,8 +590,10 @@ var website = {
         $('#calculate-route-button').empty();
         if (isEnabled) {
             $('#calculate-route-button').append('Go');
+            website.removeCancelButton();
         } else {
             $('#calculate-route-button').append('<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Loading...');
+            website.showCancelButton();
         }
         $('#calculate-route-button').prop('disabled', !isEnabled);
     },

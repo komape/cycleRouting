@@ -5,17 +5,24 @@
         padding: 0 !important;
     }
 
+}
+
+@media(max-width:768px) {
+
     #map-wrapper {
-        position: relative;
+        height: 70vh;
     }
 
-    #map {
-        position: absolute;
-        top: 0;
-        bottom: 0;
-        width: 100%;
-    }
+}
 
+#map {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    width: 100%;
+    z-index: 3;
 }
 
 #sidebar-header {
@@ -84,8 +91,8 @@ form {
 }
 
 footer {
-    position: absolute;
-    bottom: .5em;
+    left: .5rem !important;
+    bottom: .5rem !important;
 }
 
 .table {
