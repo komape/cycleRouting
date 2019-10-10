@@ -685,7 +685,7 @@ var website = {
 
     removeElevationProfile() {
         $('#elev-profile-chart-wrapper').empty();
-        $('#elev-profile-chart-wrapper').append('<h3 class="text-center>Enter a Route to get the elevation profile<h3>');
+        $('#elev-profile-chart-wrapper').append('<h3 class="text-center lead"><br>Enter a Route to get the elevation profile<h3>');
     },
 
     convertMessagesToPointsForChart(coordinates) {

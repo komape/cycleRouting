@@ -85,6 +85,10 @@ form {
     margin-top: .5em;
 }
 
+#cancel-route-calc-button {
+    margin-top: .5rem;
+}
+
 #elev-hint {
     margin-top: .5em;
     text-align: center;
