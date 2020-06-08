@@ -1,8 +1,10 @@
 # CycleRouting
 
-[Try it out!](http://www.user.tu-berlin.de/konstantinpelz/cycleRouting/)
+## *This repository is archived and the site is offline*
 
-[Try out the development build!](https://komape.github.io/cycleRouting/)
+Due to missing time to develop this idea, it is offline for now and won't be developed in near future.
+
+
 
 Found a bug? Miss a feature? Report it [here](https://github.com/komape/cycleRouting/issues/new)
 
